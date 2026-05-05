@@ -281,7 +281,7 @@
                 listDiv.innerHTML += `
                     <div class="todo-item">
                         <div>
-                            <strong>[#${todo.tag}] ${todo.title}</strong>
+                            <span style="color: var(--text-sub); font-weight: normal; margin-right: 5px;">[#${todo.tag}]</span><strong>${todo.title}</strong>
                             <span style="margin-left: 10px; font-size: 0.85em; color: var(--neon-accent);">(${todo.exp}pt)</span>
                         </div>
                         <div style="display: flex; gap: 8px;">
@@ -353,7 +353,7 @@
                 listDiv.innerHTML += `
                     <div class="quest-item">
                         <div class="item-header">
-                            <strong>[#${q.tag}] ${q.title}</strong>
+                            <span style="color: var(--text-sub); font-weight: normal; margin-right: 5px;">[#${q.tag}]</span><strong>${q.title}</strong>
                             <span style="color:var(--neon-green);">+${q.exp} pt</span>
                         </div>
                         <div class="item-badges">

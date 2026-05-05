@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quest Log - Polish</title>
+    
+    <!-- ★ Firebaseのライブラリ ★ -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=Noto+Sans+JP:wght@400;700&display=swap');
+
+        :root {
+            --bg-color: #0f172a; --card-bg: rgba(30, 41, 59, 0.8);
+            --neon-accent: #0ea5e9; --neon-gold: #fbbf24;
+            --neon-green: #22c55e; --neon-purple: #a855f7;
+            --text-main: #f8fafc; --text-sub: #94a3b8;
+        }
+
+        body { font-family: 'Noto Sans JP', sans-serif; background: radial-gradient(circle at top, #1e293b, var(--bg-color)); color: var(--text-main); max-width: 800px; margin: 0 auto; padding: 20px; min-height: 100vh; }
+        
+        #sync-status { position: fixed; top: 15px; right: 15px; font-size: 0.8rem; background: rgba(14, 165, 233, 0.2); color: var(--neon-accent); border: 1px solid var(--neon-accent); padding: 5px 12px; border-radius: 15px; font-weight: bold; z-index: 100; transition: 0.3s; }
+        .sync-active { animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+
+        .dashboard { background: var(--card-bg); backdrop-filter: blur(10px); padding: 25px; border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.1); margin-bottom: 20px; text-align: center; box-shadow: 0 0 30px rgba(14, 165, 233, 0.1); }
+        .flex-header { display: flex; justify-content: space-around; align-items: center; margin-bottom: 20px; }
+        .level-box, .gold-box { flex: 1; }
+        .level-badge { font-family: 'Orbitron', sans-serif; font-size: 4em; color: var(--neon-accent); text-shadow: 0 0 20px rgba(14, 165, 233, 0.5); line-height: 1; margin: 5px 0; }
+        .gold-badge { font-family: 'Orbitron', sans-serif; font-size: 3em; color: var(--neon-gold); text-shadow: 0 0 20px rgba(251, 191, 36, 0.5); line-height: 1; margin: 5px 0; }
+        .label { font-size: 0.8em; color: var(--text-sub); letter-spacing: 2px; }
+
+        .heatmap-container { margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); }
+        .heatmap { display: flex; justify-content: center; gap: 8px; margin-top: 10px; }
+        .heat-box { width: 30px; height: 30px; border-radius: 6px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; font-size: 0.6em; color: rgba(255,255,255,0.3); }
+        .heat-low { background: rgba(34, 197, 94, 0.2); border-color: rgba(34, 197, 94, 0.4); color: #fff;}
+        .heat-mid { background: rgba(34, 197, 94, 0.6); border-color: rgba(34, 197, 94, 0.8); color: #fff; box-shadow: 0 0 10px rgba(34, 197, 94, 0.4); }
+        .heat-high { background: var(--neon-green); border-color: #fff; color: #000; font-weight: bold; box-shadow: 0 0 15px var(--neon-green); }
+
+        .action-buttons { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 25px; }
+        .btn-action { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 12px; border-radius: 10px; cursor: pointer; transition: all 0.2s; font-size: 0.9em; font-weight: bold; }
+        .btn-action:hover { background: rgba(255,255,255,0.15); transform: translateY(-2px); }
+        .btn-shop { border-color: rgba(251, 191, 36, 0.5); color: var(--neon-gold); }
+        .btn-obsidian { border-color: rgba(168, 85, 247, 0.5); color: var(--neon-purple); }
+        .btn-ai { border-color: rgba(14, 165, 233, 0.5); color: var(--neon-accent); }
+
+        .card { background: var(--card-bg); backdrop-filter: blur(10px); padding: 25px; border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.1); margin-bottom: 20px; }
+        .form-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 12px; margin-bottom: 15px; }
+        .form-row-todo { display: grid; grid-template-columns: 3fr 1fr 1fr 1fr; gap: 10px; margin-top: 10px; }
+        .form-row-shop { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; margin-top: 15px; }
+        @media (max-width: 600px) { .form-row { grid-template-columns: 1fr 1fr; } .form-row-todo { grid-template-columns: 1fr; } .form-row-shop { grid-template-columns: 1fr; } }
+        
+        label { display: block; font-weight: 700; margin-bottom: 8px; font-size: 0.85em; color: var(--text-sub); }
+        input, select, textarea { width: 100%; padding: 12px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #fff; border-radius: 10px; font-family: inherit; font-size: 0.95em; box-sizing: border-box; }
+        input:focus, select:focus, textarea:focus { outline: none; border-color: var(--neon-accent); box-shadow: 0 0 10px rgba(14, 165, 233, 0.3); }
+        
+        button.btn-main { width: 100%; background: linear-gradient(135deg, #059669, #10b981); color: white; border: none; padding: 16px; border-radius: 12px; cursor: pointer; font-weight: bold; font-size: 1.1em; letter-spacing: 2px; transition: all 0.2s; }
+        button.btn-main:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4); }
+        button.shop-btn { background: var(--neon-gold); color: #000; border: none; padding: 12px; border-radius: 10px; font-weight: bold; cursor: pointer; transition: all 0.2s; }
+        button.shop-btn:hover { background: #fcd34d; transform: scale(1.02); }
+        
+        button.btn-add-todo { background: rgba(14, 165, 233, 0.2); color: var(--neon-accent); border: 1px solid var(--neon-accent); padding: 12px; border-radius: 10px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        button.btn-add-todo:hover { background: var(--neon-accent); color: #fff; }
+
+        .todo-item { display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 12px; margin-bottom: 10px; border-left: 3px solid var(--neon-accent); }
+        
+        /* ★ 英語化されたボタン ★ */
+        .btn-report { background: var(--neon-green); color: #fff; border: none; padding: 8px 12px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 0.85em; transition: 0.2s; }
+        .btn-report:hover { background: #15803d; }
+        
+        .btn-flee { background: transparent; color: #94a3b8; border: 1px solid #64748b; padding: 8px 12px; border-radius: 8px; font-size: 0.85em; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        .btn-flee:hover { background: #334155; color: #fff; border-color: #94a3b8; }
+
+        .quest-item { background: rgba(0,0,0,0.2); padding: 15px; border-radius: 12px; margin-bottom: 10px; border-left: 3px solid var(--neon-green); }
+        .item-header { display: flex; justify-content: space-between; margin-bottom: 8px; }
+        .item-badges { display: flex; gap: 5px; font-size: 0.75em; }
+        .badge { background: rgba(255,255,255,0.1); padding: 3px 8px; border-radius: 5px; }
+        
+        .hidden { display: none; }
+        .highlight-form { border-color: var(--neon-green) !important; box-shadow: 0 0 20px rgba(34, 197, 94, 0.2) !important; }
+    </style>
+</head>
+<body>
+
+    <div id="sync-status" class="sync-active">📡 接続中...</div>
+
+    <div class="dashboard">
+        <div class="flex-header">
+            <div class="level-box">
+                <div class="label">CURRENT LEVEL</div>
+                <div class="level-badge" id="level-display">1</div>
+                <div class="label" style="text-transform: none;">Total EXP: <span id="total-exp-display">0</span></div>
+            </div>
+            <div class="gold-box">
+                <div class="label">CURRENT GOLD</div>
+                <div class="gold-badge" id="gold-display">0</div>
+                <div class="label">💰 Reward Points</div>
+            </div>
+        </div>
+
+        <div class="heatmap-container">
+            <div class="label">WEEKLY ACTIVITY (150pt/day Target)</div>
+            <div class="heatmap" id="heatmap-container"></div>
+        </div>
+    </div>
+
+    <div class="action-buttons">
+        <button class="btn-action btn-shop" onclick="toggleSection('shop-section')">🛒 Goldを使う</button>
+        <button class="btn-action btn-obsidian" onclick="exportObsidianDaily()">📓 本日のObsidian出力</button>
+        <button class="btn-action btn-ai" onclick="exportAI()">🤖 AI分析用データ出力</button>
+    </div>
+
+    <div id="shop-section" class="card hidden">
+        <h3 style="margin-top:0; color: var(--neon-gold);">🛒 REAL REWARD</h3>
+        <p style="font-size: 0.85em; color: var(--text-sub);">今の気分でご褒美を決めて、貯まったGoldを自由に消費しよう！</p>
+        <div class="form-row-shop">
+            <input type="text" id="reward-name" placeholder="例：ちょっといいコーヒー、コンビニスイーツ等">
+            <input type="number" id="reward-cost" placeholder="消費Gold (例: 300)" min="1">
+            <button class="shop-btn" onclick="spendGold()">Goldを消費して実行！</button>
+        </div>
+    </div>
+
+    <div class="card" style="border-color: rgba(14, 165, 233, 0.3);">
+        <h3 style="margin-top:0; color: var(--neon-accent); display: flex; align-items: center; gap: 10px;">
+            📋 QUEST BOARD <span style="font-size: 0.6em; color: var(--text-sub); font-weight: normal;">今日やることを書き出そう</span>
+        </h3>
+        
+        <div class="form-row-todo">
+            <input type="text" id="todo-title" placeholder="タスクを入力 (例：面接の逆質問作成)" onkeypress="if(event.key==='Enter') addTodo()">
+            <select id="todo-exp">
+                <option value="10">💧 10 (Slime)</option>
+                <option value="30">🐺 30 (Wolf)</option>
+                <option value="50">👹 50 (Orc)</option>
+                <option value="100">🐉 100 (Boss)</option>
+            </select>
+            <select id="todo-tag">
+                <option value="Research">Research</option>
+                <option value="Career">Career</option>
+                <option value="Life">Life</option>
+                <option value="Study">Study</option>
+            </select>
+            <button class="btn-add-todo" onclick="addTodo()">ボードに追加</button>
+        </div>
+        
+        <div id="todo-list" style="margin-top: 20px;"></div>
+    </div>
+
+    <div class="card" id="report-card">
+        <form id="quest-form">
+            <div style="margin-bottom: 15px;">
+                <label>⚔️ QUEST COMPLETED (報告・振り返り)</label>
+                <input type="text" id="q-title" placeholder="完了したタスクを入力..." required>
+            </div>
+            
+            <div class="form-row">
+                <div>
+                    <label>💎 EXP & GOLD</label>
+                    <select id="q-exp">
+                        <option value="10">💧 10 (Slime)</option>
+                        <option value="30">🐺 30 (Wolf)</option>
+                        <option value="50">👹 50 (Orc)</option>
+                        <option value="100">🐉 100 (Boss)</option>
+                    </select>
+                </div>
+                <div>
+                    <label>🔋 ENERGY</label>
+                    <select id="q-energy">
+                        <option value="plus">⚡️ Charge</option>
+                        <option value="neutral" selected>💡 Neutral</option>
+                        <option value="minus">🪫 Drain</option>
+                    </select>
+                </div>
+                <div>
+                    <label>🎯 FOCUS</label>
+                    <select id="q-engage">
+                        <option value="high">🔥 Flow</option>
+                        <option value="mid">👁️ Focus</option>
+                        <option value="neutral" selected>😐 Neutral</option>
+                        <option value="low">🥱 Distracted</option>
+                    </select>
+                </div>
+                <div>
+                    <label>🏷️ TAG</label>
+                    <select id="q-tag">
+                        <option value="Research">Research</option>
+                        <option value="Career">Career</option>
+                        <option value="Life">Life</option>
+                        <option value="Study">Study</option>
+                    </select>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <label>📝 INSIGHTS (AEIOU)</label>
+                <textarea id="q-memo" placeholder="環境、ツール、気づき..."></textarea>
+            </div>
+            <button type="submit" class="btn-main" id="submit-btn">QUEST COMPLETE (報酬を獲得)</button>
+        </form>
+    </div>
+
+    <h3 style="font-family: 'Orbitron'; margin-bottom: 10px;">ACHIEVEMENT STACK</h3>
+    <div id="quest-list"></div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyB9_zzNMtSqaTx_6H4Pyi1czIuZ9yPZFDA",
+            authDomain: "travelgame-1db20.firebaseapp.com",
+            databaseURL: "https://travelgame-1db20-default-rtdb.firebaseio.com",
+            projectId: "travelgame-1db20",
+            storageBucket: "travelgame-1db20.firebasestorage.app",
+            messagingSenderId: "797015940431",
+            appId: "1:797015940431:web:c5ea3b44675df63fa6f93a"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        const dbRef = db.ref('myPersonalQuestLog_v1');
+
+        let totalExp = 0; let currentGold = 0; let quests = []; let todos = [];
+        let activeTodoId = null;
+
+        const energyMap = { 'plus': '⚡️ Charge', 'neutral': '💡 Neutral', 'minus': '🪫 Drain' };
+        const engageMap = { 'high': '🔥 Flow', 'mid': '👁️ Focus', 'neutral': '😐 Neutral', 'low': '🥱 Distracted' };
+        const syncStatus = document.getElementById('sync-status');
+
+        dbRef.on('value', (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                totalExp = data.totalExp || 0;
+                currentGold = data.currentGold || 0;
+                quests = data.quests || [];
+                todos = data.todos || [];
+            } else {
+                totalExp = 0; currentGold = 0; quests = []; todos = [];
+            }
+            updateUI();
+            syncStatus.textContent = "✅ 同期済み (Cloud Sync)";
+            syncStatus.classList.remove('sync-active');
+            syncStatus.style.borderColor = "var(--neon-green)";
+            syncStatus.style.color = "var(--neon-green)";
+        });
+
+        function saveData() {
+            syncStatus.textContent = "📡 保存中...";
+            syncStatus.classList.add('sync-active');
+            syncStatus.style.borderColor = "var(--neon-accent)";
+            syncStatus.style.color = "var(--neon-accent)";
+            dbRef.set({ totalExp, currentGold, quests, todos }).catch(err => {
+                console.error("Firebase保存エラー:", err);
+                syncStatus.textContent = "❌ エラー";
+            });
+        }
+
+        function updateUI() {
+            const level = Math.floor(totalExp / 100) + 1;
+            document.getElementById('level-display').innerText = level;
+            document.getElementById('total-exp-display').innerText = totalExp.toLocaleString();
+            document.getElementById('gold-display').innerText = currentGold.toLocaleString();
+            renderHeatmap(); renderTodos(); renderQuests();
+        }
+
+        function addTodo() {
+            const titleInput = document.getElementById('todo-title');
+            const title = titleInput.value.trim();
+            if (!title) return;
+            const exp = document.getElementById('todo-exp').value;
+            const tag = document.getElementById('todo-tag').value;
+            todos.push({ id: Date.now().toString(), title, exp, tag });
+            saveData(); titleInput.value = ''; 
+        }
+
+        function renderTodos() {
+            const listDiv = document.getElementById('todo-list');
+            listDiv.innerHTML = '';
+            if (todos.length === 0) {
+                listDiv.innerHTML = '<div style="text-align: center; color: var(--text-sub); font-size: 0.9em; padding: 10px;">現在受注しているクエストはありません</div>';
+                return;
+            }
+            todos.forEach(todo => {
+                listDiv.innerHTML += `
+                    <div class="todo-item">
+                        <div>
+                            <strong>[#${todo.tag}] ${todo.title}</strong>
+                            <span style="margin-left: 10px; font-size: 0.85em; color: var(--neon-accent);">(${todo.exp}pt)</span>
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn-report" onclick="prepareReport('${todo.id}')">✅ REPORT</button>
+                            <button class="btn-flee" onclick="fleeTodo('${todo.id}')">🏃‍♂️ FLEE</button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        function fleeTodo(id) {
+            if(confirm("このクエストから戦略的撤退をしますか？\n（ペナルティはありません。また明日以降に挑戦しましょう！）")) {
+                todos = todos.filter(t => t.id !== id);
+                if (activeTodoId === id) { activeTodoId = null; document.getElementById('quest-form').reset(); }
+                saveData();
+            }
+        }
+
+        function prepareReport(id) {
+            const todo = todos.find(t => t.id === id);
+            if(!todo) return;
+            document.getElementById('q-title').value = todo.title;
+            document.getElementById('q-exp').value = todo.exp;
+            document.getElementById('q-tag').value = todo.tag;
+            document.getElementById('q-energy').value = 'neutral';
+            document.getElementById('q-engage').value = 'neutral';
+            document.getElementById('q-memo').value = '';
+            activeTodoId = id; 
+            const formCard = document.getElementById('report-card');
+            formCard.classList.add('highlight-form');
+            formCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setTimeout(() => { formCard.classList.remove('highlight-form'); }, 1500);
+        }
+
+        function renderHeatmap() {
+            const container = document.getElementById('heatmap-container');
+            container.innerHTML = '';
+            const today = new Date();
+            const last7Days = [];
+            for(let i=6; i>=0; i--) {
+                const d = new Date(today);
+                d.setDate(today.getDate() - i);
+                last7Days.push(d.toISOString().split('T')[0]);
+            }
+            const dailyExp = {};
+            quests.forEach(q => {
+                const dateStr = q.date.split('T')[0];
+                dailyExp[dateStr] = (dailyExp[dateStr] || 0) + q.exp;
+            });
+            last7Days.forEach(dateStr => {
+                const exp = dailyExp[dateStr] || 0;
+                let heatClass = '';
+                if(exp > 0 && exp < 50) heatClass = 'heat-low';
+                else if(exp >= 50 && exp < 150) heatClass = 'heat-mid';
+                else if(exp >= 150) heatClass = 'heat-high';
+                const dayObj = new Date(dateStr);
+                const dayStr = ["日", "月", "火", "水", "木", "金", "土"][dayObj.getDay()];
+                container.innerHTML += `<div class="heat-box ${heatClass}" title="${dateStr}: ${exp}pt">${dayStr}</div>`;
+            });
+        }
+
+        function renderQuests() {
+            const listDiv = document.getElementById('quest-list');
+            listDiv.innerHTML = '';
+            quests.slice(0, 10).forEach(q => {
+                const eText = energyMap[q.energy] || q.energy;
+                const fText = engageMap[q.engage] || q.engage;
+                listDiv.innerHTML += `
+                    <div class="quest-item">
+                        <div class="item-header">
+                            <strong>[#${q.tag}] ${q.title}</strong>
+                            <span style="color:var(--neon-green);">+${q.exp} pt</span>
+                        </div>
+                        <div class="item-badges">
+                            <span class="badge">${eText}</span>
+                            <span class="badge">${fText}</span>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        document.getElementById('quest-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const expVal = parseInt(document.getElementById('q-exp').value);
+            const q = {
+                title: document.getElementById('q-title').value,
+                exp: expVal,
+                energy: document.getElementById('q-energy').value,
+                engage: document.getElementById('q-engage').value,
+                tag: document.getElementById('q-tag').value,
+                memo: document.getElementById('q-memo').value,
+                date: new Date().toISOString()
+            };
+            quests.unshift(q);
+            totalExp += expVal; currentGold += expVal; 
+            if(activeTodoId) { todos = todos.filter(t => t.id !== activeTodoId); activeTodoId = null; }
+            saveData();
+            document.getElementById('quest-form').reset();
+            document.getElementById('q-engage').value = 'neutral';
+            document.getElementById('q-energy').value = 'neutral';
+        });
+
+        function spendGold() {
+            const name = document.getElementById('reward-name').value;
+            const cost = parseInt(document.getElementById('reward-cost').value);
+            if (!name || isNaN(cost) || cost <= 0) return alert("ご褒美の内容と消費Goldを正しく入力してください！");
+            if (currentGold < cost) return alert(`Goldが足りません！（現在: ${currentGold}G / 必要: ${cost}G）`);
+            if (confirm(`「${name}」のために ${cost}G を消費しますか？`)) {
+                currentGold -= cost; saveData();
+                document.getElementById('reward-name').value = ''; document.getElementById('reward-cost').value = '';
+                alert("購入完了！現実世界でご褒美を思いっきり楽しんでください！");
+            }
+        }
+
+        function exportObsidianDaily() {
+            const todayStr = new Date().toISOString().split('T')[0];
+            const todaysQuests = quests.filter(q => q.date.startsWith(todayStr));
+            if(todaysQuests.length === 0) return alert("本日のクエストはまだありません！");
+            const todayExp = todaysQuests.reduce((sum, q) => sum + q.exp, 0);
+            const flowCount = todaysQuests.filter(q => q.engage === 'high').length;
+            let md = `## ⚔️ Today's Quest Checkout\n- **Date**: ${todayStr}\n- **Daily EXP**: ${todayExp} pt\n- **Flow States**: ${flowCount} times\n\n### Tasks Completed\n`;
+            todaysQuests.forEach(q => {
+                md += `- [x] [${q.tag}] ${q.title} (${q.exp}pt) #energy_${q.energy} #focus_${q.engage}\n`;
+                if(q.memo) md += `    - 📝 ${q.memo.replace(/\n/g, ' ')}\n`;
+            });
+            navigator.clipboard.writeText(md).then(() => alert("クリップボードにコピーしました！\nObsidianのデイリーノートに貼り付けてください。"));
+        }
+
+        function exportAI() {
+            if(quests.length === 0) return alert("データがありません");
+            const exportData = JSON.stringify(quests.slice(0, 50), null, 2); 
+            const promptText = `以下のJSONデータは、私の日々の活動記録（グッドタイム日誌＋タスク管理）です。\nこのデータから、「私がどんな活動・環境の時にエネルギーが上がりやすく、フロー（没頭状態）に入りやすいか」の傾向を分析し、今後のライフデザインに向けたアドバイスをください。\n\n${exportData}`;
+            navigator.clipboard.writeText(promptText).then(() => alert("AI用プロンプトとデータをクリップボードにコピーしました！\nGeminiやClaudeにそのまま貼り付けてみてください。"));
+        }
+
+        function toggleSection(id) { document.getElementById(id).classList.toggle('hidden'); }
+    </script>
+</body>
+</html>

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quest Log - Deadline Edition</title>
+    <title>Quest Log - Auto Sort Edition</title>
     
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
@@ -80,8 +80,8 @@
         .hidden { display: none; }
         .highlight-form { border-color: var(--neon-green) !important; box-shadow: 0 0 20px rgba(34, 197, 94, 0.2) !important; }
         
-        /* 期日バッジのデザイン */
-        .date-badge { margin-left: 10px; font-size: 0.8em; color: #fbbf24; background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.4); padding: 2px 8px; border-radius: 12px; font-weight: bold; }
+        /* 期日バッジのデザイン（右側の余白に変更） */
+        .date-badge { margin-right: 8px; font-size: 0.8em; color: #fbbf24; background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.4); padding: 2px 8px; border-radius: 12px; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -286,7 +286,20 @@
                 return;
             }
             
-            todos.forEach(todo => {
+            // ★追加：日付が近い順にソート（日付なしは一番下）★
+            const sortedTodos = [...todos].sort((a, b) => {
+                if (a.dueDate && b.dueDate) {
+                    return new Date(a.dueDate) - new Date(b.dueDate);
+                } else if (a.dueDate && !b.dueDate) {
+                    return -1;
+                } else if (!a.dueDate && b.dueDate) {
+                    return 1;
+                } else {
+                    return 0; // どちらも無い場合は追加順
+                }
+            });
+
+            sortedTodos.forEach(todo => {
                 let dateBadge = '';
                 if(todo.dueDate) {
                     const d = new Date(todo.dueDate);
@@ -294,13 +307,14 @@
                     dateBadge = `<span class="date-badge">🗓️ ${formattedDate}まで</span>`;
                 }
 
+                // ★変更：日付、タスク名、タグの順番にレイアウト★
                 listDiv.innerHTML += `
                     <div class="todo-item">
                         <div style="display: flex; align-items: center; flex-wrap: wrap;">
-                            <span style="color: var(--text-sub); font-weight: normal; margin-right: 5px;">[#${todo.tag}]</span>
-                            <strong>${todo.title}</strong>
                             ${dateBadge}
-                            <span style="margin-left: 10px; font-size: 0.85em; color: var(--neon-accent);">(${todo.exp}pt)</span>
+                            <strong>${todo.title}</strong>
+                            <span style="color: var(--text-sub); font-weight: normal; margin-left: 8px;">[#${todo.tag}]</span>
+                            <span style="margin-left: 8px; font-size: 0.85em; color: var(--neon-accent);">(${todo.exp}pt)</span>
                         </div>
                         <div style="display: flex; gap: 8px;">
                             <button class="btn-report" onclick="prepareReport('${todo.id}')">✅ REPORT</button>

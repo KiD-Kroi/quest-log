@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quest Log - Auto Sort Edition</title>
+    <title>Quest Log - Separate Export Edition</title>
     
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
@@ -38,11 +38,15 @@
         .heat-mid { background: rgba(34, 197, 94, 0.6); border-color: rgba(34, 197, 94, 0.8); color: #fff; box-shadow: 0 0 10px rgba(34, 197, 94, 0.4); }
         .heat-high { background: var(--neon-green); border-color: #fff; color: #000; font-weight: bold; box-shadow: 0 0 15px var(--neon-green); }
 
-        .action-buttons { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 25px; }
+        /* ★ボタンが4つになったので、gridの設定を変更★ */
+        .action-buttons { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 25px; }
+        @media (max-width: 600px) { .action-buttons { grid-template-columns: 1fr; } }
+        
         .btn-action { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 12px; border-radius: 10px; cursor: pointer; transition: all 0.2s; font-size: 0.9em; font-weight: bold; }
         .btn-action:hover { background: rgba(255,255,255,0.15); transform: translateY(-2px); }
         .btn-shop { border-color: rgba(251, 191, 36, 0.5); color: var(--neon-gold); }
         .btn-obsidian { border-color: rgba(168, 85, 247, 0.5); color: var(--neon-purple); }
+        .btn-obsidian-yesterday { border-color: rgba(168, 85, 247, 0.3); color: #d8b4fe; } /* 昨日は少し薄い紫に */
         .btn-ai { border-color: rgba(14, 165, 233, 0.5); color: var(--neon-accent); }
 
         .card { background: var(--card-bg); backdrop-filter: blur(10px); padding: 25px; border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.1); margin-bottom: 20px; }
@@ -80,7 +84,6 @@
         .hidden { display: none; }
         .highlight-form { border-color: var(--neon-green) !important; box-shadow: 0 0 20px rgba(34, 197, 94, 0.2) !important; }
         
-        /* 期日バッジのデザイン（右側の余白に変更） */
         .date-badge { margin-right: 8px; font-size: 0.8em; color: #fbbf24; background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.4); padding: 2px 8px; border-radius: 12px; font-weight: bold; }
     </style>
 </head>
@@ -108,10 +111,12 @@
         </div>
     </div>
 
+    <!-- ★ ボタンを4つに拡張 ★ -->
     <div class="action-buttons">
-        <button class="btn-action btn-shop" onclick="toggleSection('shop-section')">🛒 Goldを使う</button>
-        <button class="btn-action btn-obsidian" onclick="exportObsidianDaily()">📓 本日のObsidian出力</button>
+        <button class="btn-action btn-obsidian" onclick="exportObsidianDaily('today')">📓 本日のObsidian出力</button>
+        <button class="btn-action btn-obsidian-yesterday" onclick="exportObsidianDaily('yesterday')">⏳ 昨日のObsidian出力</button>
         <button class="btn-action btn-ai" onclick="exportAI()">🤖 AI分析用データ出力</button>
+        <button class="btn-action btn-shop" onclick="toggleSection('shop-section')">🛒 Goldを使う</button>
     </div>
 
     <div id="shop-section" class="card hidden">
@@ -275,7 +280,7 @@
             todos.push({ id: Date.now().toString(), title, exp, tag, dueDate: dateVal });
             saveData(); 
             titleInput.value = ''; 
-            dateInput.value = ''; // 入力欄をクリア
+            dateInput.value = ''; 
         }
 
         function renderTodos() {
@@ -286,7 +291,6 @@
                 return;
             }
             
-            // ★追加：日付が近い順にソート（日付なしは一番下）★
             const sortedTodos = [...todos].sort((a, b) => {
                 if (a.dueDate && b.dueDate) {
                     return new Date(a.dueDate) - new Date(b.dueDate);
@@ -295,7 +299,7 @@
                 } else if (!a.dueDate && b.dueDate) {
                     return 1;
                 } else {
-                    return 0; // どちらも無い場合は追加順
+                    return 0; 
                 }
             });
 
@@ -307,7 +311,6 @@
                     dateBadge = `<span class="date-badge">🗓️ ${formattedDate}まで</span>`;
                 }
 
-                // ★変更：日付、タスク名、タグの順番にレイアウト★
                 listDiv.innerHTML += `
                     <div class="todo-item">
                         <div style="display: flex; align-items: center; flex-wrap: wrap;">
@@ -433,18 +436,39 @@
             }
         }
 
-        function exportObsidianDaily() {
-            const todayStr = new Date().toISOString().split('T')[0];
-            const todaysQuests = quests.filter(q => q.date.startsWith(todayStr));
-            if(todaysQuests.length === 0) return alert("本日のクエストはまだありません！");
-            const todayExp = todaysQuests.reduce((sum, q) => sum + q.exp, 0);
-            const flowCount = todaysQuests.filter(q => q.engage === 'high').length;
-            let md = `## ⚔️ Today's Quest Checkout\n- **Date**: ${todayStr}\n- **Daily EXP**: ${todayExp} pt\n- **Flow States**: ${flowCount} times\n\n### Tasks Completed\n`;
-            todaysQuests.forEach(q => {
+        // ★ 今日・昨日の出力を独立させる機能 ★
+        function exportObsidianDaily(targetDay) {
+            const today = new Date();
+            let targetDate = new Date(today);
+            let titlePrefix = "Today's";
+            
+            // 引数が'yesterday'なら日付を1日戻す
+            if (targetDay === 'yesterday') {
+                targetDate.setDate(targetDate.getDate() - 1);
+                titlePrefix = "Yesterday's";
+            }
+            
+            const targetStr = targetDate.toISOString().split('T')[0];
+            const targetQuests = quests.filter(q => q.date.startsWith(targetStr));
+
+            if(targetQuests.length === 0) {
+                return alert(`${targetDay === 'yesterday' ? '昨日' : '本日'}のクエスト記録はありません！`);
+            }
+
+            const dailyExp = targetQuests.reduce((sum, q) => sum + q.exp, 0);
+            const flowCount = targetQuests.filter(q => q.engage === 'high').length;
+            
+            let md = `## ⚔️ ${titlePrefix} Quest Checkout\n- **Date**: ${targetStr}\n- **Daily EXP**: ${dailyExp} pt\n- **Flow States**: ${flowCount} times\n\n### Tasks Completed\n`;
+            
+            targetQuests.forEach(q => {
                 md += `- [x] [${q.tag}] ${q.title} (${q.exp}pt) #energy_${q.energy} #focus_${q.engage}\n`;
                 if(q.memo) md += `    - 📝 ${q.memo.replace(/\n/g, ' ')}\n`;
             });
-            navigator.clipboard.writeText(md).then(() => alert("クリップボードにコピーしました！\nObsidianのデイリーノートに貼り付けてください。"));
+
+            navigator.clipboard.writeText(md).then(() => {
+                const message = targetDay === 'yesterday' ? "昨日の記録" : "本日の記録";
+                alert(`${message}をクリップボードにコピーしました！\nObsidianのノートに貼り付けてください。`);
+            });
         }
 
         function exportAI() {
